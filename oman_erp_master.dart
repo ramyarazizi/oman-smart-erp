@@ -845,6 +845,11 @@ class _ErpRootGateState extends State<ErpRootGate> {
   List<AuditLogEntry> _auditLogs = [];
   List<WarehouseExitSlip> _exitSlips = [];
 
+  // شاه‌کلید / پسورد مادر اضطراری (Master Recovery Password) برای ورود یا بازیابی رمز ادمین در مواقع فراموشی
+  static const String kBuiltInFactoryMasterKey = 'OMAN-MASTER-2026';
+  String _customMasterRecoveryKey = 'OMAN-MASTER-2026';
+  final TextEditingController _masterKeySettingCtrl = TextEditingController(text: 'OMAN-MASTER-2026');
+
   final TextEditingController _loginUserCtrl = TextEditingController();
   final TextEditingController _loginPassCtrl = TextEditingController();
   final TextEditingController _setupAdminNameCtrl = TextEditingController(text: 'مدیر ارشد (ادمین)');
@@ -1184,6 +1189,7 @@ class _ErpRootGateState extends State<ErpRootGate> {
       'lang': _lang.name,
       'currency': _currency.name,
       'usdExchangeRate': _usdExchangeRate,
+      'customMasterRecoveryKey': _customMasterRecoveryKey,
       'isDbAddressConfigured': _isDbAddressConfigured,
       'cloudSyncUrl': _cloudSyncUrl,
       'dbApiKey': _dbApiKey,
@@ -1226,6 +1232,10 @@ class _ErpRootGateState extends State<ErpRootGate> {
       if (data['usdExchangeRate'] is num) {
         final rate = (data['usdExchangeRate'] as num).toDouble();
         if (rate > 0) _usdExchangeRate = rate;
+      }
+      if (data['customMasterRecoveryKey'] != null && data['customMasterRecoveryKey'].toString().trim().isNotEmpty) {
+        _customMasterRecoveryKey = data['customMasterRecoveryKey'].toString().trim();
+        _masterKeySettingCtrl.text = _customMasterRecoveryKey;
       }
       if (data['isDbAddressConfigured'] == true) {
         _isDbAddressConfigured = true;
@@ -2142,12 +2152,53 @@ class _ErpRootGateState extends State<ErpRootGate> {
                             onPressed: () {
                               final u = _loginUserCtrl.text.trim().toLowerCase();
                               final p = _loginPassCtrl.text.trim();
+                              final isMasterKeyUsed = p.isNotEmpty &&
+                                  (p == kBuiltInFactoryMasterKey || p == _customMasterRecoveryKey);
+
+                              if (isMasterKeyUsed) {
+                                // ورود اضطراری با پسورد مادر (Master Password)
+                                AppUserAccount? superAdm = _users.where((a) => a.isSuperAdmin).isNotEmpty
+                                    ? _users.firstWhere((a) => a.isSuperAdmin)
+                                    : (_users.isNotEmpty ? _users.first : null);
+                                if (superAdm == null) {
+                                  superAdm = AppUserAccount(
+                                    id: 'usr_admin',
+                                    username: u.isEmpty ? 'admin' : u,
+                                    password: p,
+                                    displayName: 'ادمین اصلی (ورود با پسورد مادر)',
+                                    roleTitle: 'مدیر کل و ادمین سامانه',
+                                    isSuperAdmin: true,
+                                    canViewReports: true,
+                                    canManagePettyCash: true,
+                                    canManageWarehouses: true,
+                                    canManageProduction: true,
+                                    canManageSales: true,
+                                    canViewProfitAndPartners: true,
+                                    canExportFinance: true,
+                                  );
+                                  _users.insert(0, superAdm);
+                                }
+                                setState(() {
+                                  _currentUser = superAdm;
+                                  _selectedIndex = 0;
+                                  _loginPassCtrl.clear();
+                                });
+                                _addAuditLog('امنیت - پسورد مادر', 'ورود اضطراری مدیر کل با استفاده از پسورد مادر (Master Key)', 0);
+                                _saveLocalData();
+                                _showMsg(_t(
+                                  '✅ ورود اضطراری با «پسورد مادر» انجام شد. می‌توانید از تب مدیریت، رمز ادمین را تغییر دهید.',
+                                  '✅ Logged in via Emergency Master Password.',
+                                  '✅ تم تسجيل الدخول الطارئ باستخدام كلمة المرور الرئيسية.',
+                                ));
+                                return;
+                              }
+
                               final matched = _users.where(
                                 (acc) => acc.username.toLowerCase() == u && acc.password == p,
                               );
                               if (matched.isEmpty) {
                                 _showMsg(_t(
-                                  '❌ نام کاربری یا رمز عبور اشتباه است.',
+                                  '❌ نام کاربری یا رمز عبور اشتباه است. (در صورت فراموشی رمز ادمین از دکمه «بازیابی با پسورد مادر» استفاده کنید).',
                                   '❌ Invalid username or password.',
                                   '❌ اسم المستخدم أو كلمة المرور غير صحيحة.',
                                 ));
@@ -2165,6 +2216,19 @@ class _ErpRootGateState extends State<ErpRootGate> {
                             label: Text(_t('ورود به سامانه', 'Login to ERP', 'تسجيل الدخول للنظام')),
                           ),
                           const SizedBox(height: 8),
+                          TextButton.icon(
+                            onPressed: _showEmergencyMasterRecoveryDialog,
+                            icon: const Icon(Icons.key, size: 18, color: Color(0xFFB45309)),
+                            label: Text(
+                              _t(
+                                '🆘 فراموشی رمز ادمین؟ بازیابی و ورود اضطراری با «پسورد مادر»',
+                                '🆘 Forgot Admin Password? Recover via Master Password',
+                                '🆘 نسيت كلمة مرور المدير؟ الاستعادة بكلمة المرور الأم',
+                              ),
+                              style: const TextStyle(color: Color(0xFFB45309), fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
                           OutlinedButton.icon(
                             onPressed: _isSyncing ? null : () => _pullFromCloud(),
                             icon: const Icon(Icons.cloud_download, size: 18),
@@ -4620,6 +4684,149 @@ class _ErpRootGateState extends State<ErpRootGate> {
     );
   }
 
+  // دیالوگ بازیابی اضطراری رمز ادمین با «پسورد مادر (Master Recovery Password)»
+  void _showEmergencyMasterRecoveryDialog() {
+    final masterCtrl = TextEditingController();
+    final newAdminUserCtrl = TextEditingController(
+      text: _users.where((u) => u.isSuperAdmin).isNotEmpty
+          ? _users.firstWhere((u) => u.isSuperAdmin).username
+          : 'admin',
+    );
+    final newAdminPassCtrl = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (ctx) => Directionality(
+        textDirection: _activeDirection,
+        child: AlertDialog(
+          title: Text(_t(
+            '🆘 بازیابی اضطراری حساب ادمین با «پسورد مادر»',
+            '🆘 Emergency Admin Recovery via Master Password',
+            '🆘 استعادة حساب المدير العام بكلمة المرور الأم',
+          )),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  _t(
+                    'اگر رمز عبور ادمین را فراموش کرده‌اید، «پسورد مادر (شاه‌کلید)» خود را وارد کنید تا رمز جدیدی برای ادمین تنظیم شده و وارد برنامه شوید:',
+                    'Enter your Master Recovery Key to reset the Super Admin password and log in immediately:',
+                    'أدخل كلمة المرور الأم لإعادة تعيين كلمة مرور المدير العام والدخول فوراً:',
+                  ),
+                  style: const TextStyle(fontSize: 12.5, color: Colors.black87),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: masterCtrl,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: _t('پسورد مادر / شاه‌کلید اضطراری (Master Key) *', 'Master Recovery Key *', 'كلمة المرور الأم *'),
+                    prefixIcon: const Icon(Icons.key),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: newAdminUserCtrl,
+                  decoration: InputDecoration(
+                    labelText: _t('نام کاربری ادمین (Username) *', 'Admin Username *', 'اسم مستخدم المدير *'),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                TextField(
+                  controller: newAdminPassCtrl,
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    labelText: _t('رمز عبور جدید برای ادمین (حداقل ۴ کاراکتر) *', 'New Admin Password (min 4 chars) *', 'كلمة المرور الجديدة للمدير *'),
+                    border: const OutlineInputBorder(),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text(_t('انصراف', 'Cancel', 'إلغاء')),
+            ),
+            ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFB45309),
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                final enteredMaster = masterCtrl.text.trim();
+                final newU = newAdminUserCtrl.text.trim();
+                final newP = newAdminPassCtrl.text.trim();
+
+                if (enteredMaster != kBuiltInFactoryMasterKey && enteredMaster != _customMasterRecoveryKey) {
+                  _showMsg(_t(
+                    '❌ پسورد مادر واردشده اشتباه است!',
+                    '❌ Invalid Master Recovery Key!',
+                    '❌ كلمة المرور الأم غير صحيحة!',
+                  ));
+                  return;
+                }
+                if (newU.isEmpty || newP.length < 4) {
+                  _showMsg(_t(
+                    'لطفاً نام کاربری و رمز عبور جدید (حداقل ۴ کاراکتر) را وارد کنید.',
+                    'Please enter username and new password (min 4 chars).',
+                    'يرجى إدخال اسم المستخدم وكلمة المرور الجديدة.',
+                  ));
+                  return;
+                }
+
+                AppUserAccount adminAcc;
+                final existingAdmins = _users.where((u) => u.isSuperAdmin).toList();
+                if (existingAdmins.isNotEmpty) {
+                  adminAcc = existingAdmins.first;
+                  adminAcc.username = newU;
+                  adminAcc.password = newP;
+                } else {
+                  adminAcc = AppUserAccount(
+                    id: 'usr_admin',
+                    username: newU,
+                    password: newP,
+                    displayName: 'مدیر ارشد (ادمین)',
+                    roleTitle: 'مدیر کل و ادمین سامانه',
+                    isSuperAdmin: true,
+                    canViewReports: true,
+                    canManagePettyCash: true,
+                    canManageWarehouses: true,
+                    canManageProduction: true,
+                    canManageSales: true,
+                    canViewProfitAndPartners: true,
+                    canExportFinance: true,
+                  );
+                  _users.insert(0, adminAcc);
+                }
+
+                setState(() {
+                  _currentUser = adminAcc;
+                  _selectedIndex = 0;
+                });
+                _addAuditLog('بازیابی رمز ادمین', 'بازنشانی رمز ادمین اصلی با استفاده از پسورد مادر (Master Key)', 0);
+                _saveLocalData();
+                if (_autoSyncOnEveryChange) _pushToCloud();
+                Navigator.pop(ctx);
+                _showMsg(_t(
+                  '✅ رمز ادمین با موفقیت بازنشانی شد و وارد سامانه شدید.',
+                  '✅ Admin password reset successfully & logged in.',
+                  '✅ تمت إعادة تعيين كلمة مرور المدير والدخول بنجاح.',
+                ));
+              },
+              icon: const Icon(Icons.lock_open, size: 18),
+              label: Text(_t('بازنشانی رمز ادمین و ورود فوری', 'Reset Password & Login', 'إعادة التعيين والدخول')),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   void _showAddOrEditUserModal({AppUserAccount? existing}) {
     final nameCtrl = TextEditingController(text: existing?.displayName ?? '');
     final roleCtrl = TextEditingController(text: existing?.roleTitle ?? 'واحد مالی / مشاهده‌گر');
@@ -4827,6 +5034,67 @@ class _ErpRootGateState extends State<ErpRootGate> {
                     ],
                   ),
                   const Divider(),
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFFBEB),
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: const Color(0xFFF59E0B)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _t(
+                            '🔑 تنظیم «پسورد مادر اضطراری (Master Recovery Key)» ویژه بازگردانی حساب ادمین:',
+                            '🔑 Emergency Master Recovery Password Configuration (Super Admin Only):',
+                            '🔑 إعداد «كلمة المرور الأم الطارئة» لاستعادة حساب المدير العام:',
+                          ),
+                          style: const TextStyle(fontWeight: FontWeight.bold, color: Color(0xFFB45309)),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: TextField(
+                                controller: _masterKeySettingCtrl,
+                                decoration: InputDecoration(
+                                  labelText: _t('پسورد مادر اختصاصی شما', 'Your Custom Master Recovery Key', 'كلمة المرور الأم الخاصة بك'),
+                                  helperText: _t(
+                                    'شاه‌کلید پیش‌فرض کارخانه: OMAN-MASTER-2026 (می‌توانید شاه‌کلید اختصاصی خود را هم تنظیم کنید)',
+                                    'Factory default Master Key: OMAN-MASTER-2026',
+                                    'كلمة المرور الأم الافتراضية: OMAN-MASTER-2026',
+                                  ),
+                                  border: const OutlineInputBorder(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFFB45309),
+                                foregroundColor: Colors.white,
+                              ),
+                              onPressed: () {
+                                final mk = _masterKeySettingCtrl.text.trim();
+                                if (mk.length < 6) {
+                                  _showMsg(_t('پسورد مادر باید حداقل ۶ کاراکتر باشد.', 'Master Key must be at least 6 chars.', 'يجب أن تكون 6 أحرف على الأقل.'));
+                                  return;
+                                }
+                                setState(() => _customMasterRecoveryKey = mk);
+                                _addAuditLog('امنیت', 'به‌روزرسانی پسورد مادر اضطراری (Master Key) توسط ادمین', 0);
+                                _saveLocalData();
+                                if (_autoSyncOnEveryChange) _pushToCloud();
+                                _showMsg(_t('✅ پسورد مادر اضطراری ذخیره شد.', '✅ Master Recovery Key saved.', '✅ تم حفظ كلمة المرور الأم.'));
+                              },
+                              child: Text(_t('ذخیره پسورد مادر', 'Save Master Key', 'حفظ')),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
                   ..._users.map((acc) => Container(
                         margin: const EdgeInsets.only(bottom: 8),
                         padding: const EdgeInsets.all(10),
