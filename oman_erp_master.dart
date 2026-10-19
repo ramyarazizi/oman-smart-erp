@@ -53,11 +53,6 @@ class OmanSmartErpApp extends StatelessWidget {
         primaryColor: const Color(0xFF1E3A5F),
         colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1E3A5F)),
         scaffoldBackgroundColor: const Color(0xFFF4F7FB),
-        cardTheme: CardThemeData(
-          elevation: 1.5,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-          color: Colors.white,
-        ),
         useMaterial3: true,
       ),
       home: const ErpRootGate(),
@@ -419,7 +414,10 @@ class TransactionRecord {
   final double amountOMR;
   final bool hasVat5Percent;
   final String taxInvoiceNo; // شماره فاکتور رسمی مالیاتی فروشنده (جهت تایید ذی‌حسابی عمان)
-  final String vatClassRule; // 'مشمول ۵٪ قابل استرداد (Standard 5%)' | 'نرخ صفر (Zero-Rated 0%)' | 'معاف / فاقد فاکتور رسمی (Non-Claimable)'
+  final String vatClassRule; // 'standard_5' | 'zero_rated_0' | 'exempt_non_claimable'
+  final bool isComptrollerApprovedInputVat;
+  final double recordedExchangeRate;
+  final String recordedCurrencyCode;
   final DateTime date;
   final String topic;
   final String category;
@@ -435,7 +433,10 @@ class TransactionRecord {
     required this.amountOMR,
     this.hasVat5Percent = false,
     this.taxInvoiceNo = '',
-    this.vatClassRule = 'معاف / فاقد فاکتور رسمی (Non-Claimable)',
+    this.vatClassRule = 'exempt_non_claimable',
+    this.isComptrollerApprovedInputVat = true,
+    this.recordedExchangeRate = 2.60,
+    this.recordedCurrencyCode = 'rial',
     required this.date,
     required this.topic,
     required this.category,
@@ -447,9 +448,6 @@ class TransactionRecord {
 
   double get vatAmountOMR => hasVat5Percent ? amountOMR * (5.0 / 105.0) : 0.0;
   double get netBeforeVatOMR => amountOMR - vatAmountOMR;
-  // از نظر ذی‌حساب مالیاتی عمان، مالیات خرید تنها زمانی قابل استرداد است که هزینه کاری باشد و مشمول ۵٪ استاندارد باشد
-  bool get isComptrollerApprovedInputVat =>
-      mode == TxMode.expense && source != ExpenseSource.personal && hasVat5Percent;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -459,6 +457,9 @@ class TransactionRecord {
         'hasVat5Percent': hasVat5Percent,
         'taxInvoiceNo': taxInvoiceNo,
         'vatClassRule': vatClassRule,
+        'isComptrollerApprovedInputVat': isComptrollerApprovedInputVat,
+        'recordedExchangeRate': recordedExchangeRate,
+        'recordedCurrencyCode': recordedCurrencyCode,
         'date': date.toIso8601String(),
         'topic': topic,
         'category': category,
@@ -478,7 +479,10 @@ class TransactionRecord {
         amountOMR: (j['amountOMR'] as num?)?.toDouble() ?? 0.0,
         hasVat5Percent: j['hasVat5Percent'] == true,
         taxInvoiceNo: j['taxInvoiceNo']?.toString() ?? '',
-        vatClassRule: j['vatClassRule']?.toString() ?? (j['hasVat5Percent'] == true ? 'مشمول ۵٪ قابل استرداد (Standard 5%)' : 'معاف / فاقد فاکتور رسمی (Non-Claimable)'),
+        vatClassRule: j['vatClassRule']?.toString() ?? (j['hasVat5Percent'] == true ? 'standard_5' : 'exempt_non_claimable'),
+        isComptrollerApprovedInputVat: j['isComptrollerApprovedInputVat'] != false,
+        recordedExchangeRate: (j['recordedExchangeRate'] as num?)?.toDouble() ?? 2.60,
+        recordedCurrencyCode: j['recordedCurrencyCode']?.toString() ?? 'rial',
         date: DateTime.tryParse(j['date']?.toString() ?? '') ?? DateTime.now(),
         topic: j['topic']?.toString() ?? '',
         category: j['category']?.toString() ?? '',
@@ -1779,6 +1783,12 @@ class _ErpRootGateState extends State<ErpRootGate> {
     final dirStr = _lang == AppLang.en ? 'ltr' : 'rtl';
     final alignStr = _lang == AppLang.en ? 'left' : 'right';
 
+    final officialHeaderHtml = _buildOfficialPrintHeaderHtml(
+      '📦 ${_t('برگه رسمی خروج کالا از انبار (حواله تحویل سفارش مشتری)', 'Official Warehouse Exit & Delivery Slip', 'سند رسمي لإخراج البضاعة من المستودع')}',
+      '<b>${_t('شماره برگه خروج:', 'Exit Slip No:', 'رقم سند الإخراج:')} ${slip.slipNumber}</b><br>${_t('کد فاکتور مرجع:', 'Order Invoice ID:', 'رقم الفاتورة المرجعي:')} #${slip.orderInvoiceId.substring(saleIdSlice(slip.orderInvoiceId))}<br>${_t('تاریخ صدور:', 'Issue Date:', 'تاريخ الإصدار:')} ${_fmtDate(slip.issueDate)}',
+    );
+    final officialFooterHtml = _buildOfficialPrintFooterHtml();
+
     final htmlDoc = '''<!DOCTYPE html>
 <html lang="${_lang.name}" dir="$dirStr">
 <head>
@@ -1804,10 +1814,7 @@ class _ErpRootGateState extends State<ErpRootGate> {
     </button>
   </div>
   <div class="box">
-    ${_buildOfficialPrintHeaderHtml(
-      '📦 ${_t('برگه رسمی خروج کالا از انبار (حواله تحویل سفارش مشتری)', 'Official Warehouse Exit & Delivery Slip', 'سند رسمي لإخراج البضاعة من المستودع')}',
-      '<b>${_t('شماره برگه خروج:', 'Exit Slip No:', 'رقم سند الإخراج:')} ${slip.slipNumber}</b><br>${_t('کد فاکتور مرجع:', 'Order Invoice ID:', 'رقم الفاتورة المرجعي:')} #${slip.orderInvoiceId.substring(saleIdSlice(slip.orderInvoiceId))}<br>${_t('تاریخ صدور:', 'Issue Date:', 'تاريخ الإصدار:')} ${_fmtDate(slip.issueDate)}',
-    )}
+    $officialHeaderHtml
     <div class="meta-grid">
       <div><b>👤 ${_t('نام مشتری / تحویل‌گیرنده:', 'Customer Name:', 'اسم العميل / المستلم:')}</b> ${slip.customerName}</div>
       <div><b>📍 ${_t('آدرس / تلفن مشتری:', 'Address / Phone:', 'عنوان / هاتف العميل:')}</b> ${slip.customerAddressOrPhone}</div>
@@ -1851,7 +1858,7 @@ class _ErpRootGateState extends State<ErpRootGate> {
       <div>${_t('امضای مدیر فروش / مالی', 'Sales / Finance Approval', 'توقيع مدير المبيعات / المالية')}<br><br>___________________</div>
       <div>${_t('مهر و امضای مشتری (تحویل‌گیرنده قطعی)', 'Customer Receiver Signature', 'توقيع العميل المستلم')}<br><br>___________________</div>
     </div>
-    ${_buildOfficialPrintFooterHtml()}
+    $officialFooterHtml
   </div>
 </body>
 </html>''';
@@ -3248,6 +3255,12 @@ class _ErpRootGateState extends State<ErpRootGate> {
       ''');
     }
 
+    final vatHeaderHtml = _buildOfficialPrintHeaderHtml(
+      '⚖️ ${_t('گزارش نهایی ذی‌حسابی و اظهارنامه مالیات بر ارزش افزوده عمان (Oman OTA 5% VAT Return)', 'Official Oman Tax Authority (OTA) 5% VAT & Comptroller Audit Report', 'التقرير النهائي للمراقب المالي وإقرار ضريبة القيمة المضافة العمانية (5% VAT)')}',
+      '<b>${_t('تاریخ صدور:', 'Date:', 'التاريخ:')}</b> ${_fmtDate(DateTime.now())}<br><b>${_t('واحد پول:', 'Currency:', 'العملة:')}</b> $_currUnit<br><b>CR No:</b> $kCompanyCrNo',
+    );
+    final vatFooterHtml = _buildOfficialPrintFooterHtml();
+
     final htmlDoc = '''<!DOCTYPE html>
 <html lang="${_lang.name}" dir="$dirStr">
 <head>
@@ -3273,10 +3286,7 @@ class _ErpRootGateState extends State<ErpRootGate> {
     </button>
   </div>
   <div class="box">
-    ${_buildOfficialPrintHeaderHtml(
-      '⚖️ ${_t('گزارش نهایی ذی‌حسابی و اظهارنامه مالیات بر ارزش افزوده عمان (Oman OTA 5% VAT Return)', 'Official Oman Tax Authority (OTA) 5% VAT & Comptroller Audit Report', 'التقرير النهائي للمراقب المالي وإقرار ضريبة القيمة المضافة العمانية (5% VAT)')}',
-      '<b>${_t('تاریخ صدور:', 'Date:', 'التاريخ:')}</b> ${_fmtDate(DateTime.now())}<br><b>${_t('واحد پول:', 'Currency:', 'العملة:')}</b> $_currUnit<br><b>CR No:</b> $kCompanyCrNo',
-    )}
+    $vatHeaderHtml
     <div class="kpi-grid">
       <div class="kpi-card"><b>۱. ${_t('مالیات فروش (Output VAT 5%):', 'Output VAT (Sales 5%):', 'ضريبة المبيعات 5%:')}</b><br><span style="font-size:14px; color:#b45309; font-weight:bold;">${_fmtMoneyWithUnit(outputVatSales)}</span><br><small>${_t('فروش مشمول:', 'Taxable Sales:', 'المبيعات الخاضعة:')} ${_fmtMoneyWithUnit(taxableSalesNet)}</small></div>
       <div class="kpi-card"><b>۲. ${_t('مالیات خرید قابل استرداد (Input VAT 5%):', 'Claimable Input VAT (5%):', 'ضريبة المشتريات القابلة للاسترداد:')}</b><br><span style="font-size:14px; color:#0f766e; font-weight:bold;">${_fmtMoneyWithUnit(claimableInputVat)}</span><br><small>${_t('در انتظار فاکتور رسمی:', 'Unverified VAT:', 'غير معتمد:')} ${_fmtMoneyWithUnit(pendingUnverifiedInputVat)}</small></div>
@@ -3306,7 +3316,7 @@ class _ErpRootGateState extends State<ErpRootGate> {
       <div>${_t('امضای مدیر مالی (CFO)', 'Chief Financial Officer (CFO)', 'توقيع المدير المالي')}<br><br>___________________</div>
       <div>${_t('مهر و امضای مدیرعامل شرکت ارواد (CR: 1658937)', 'Managing Director — Arwad SPC', 'توقيع المدير العام لشركة أرواد')}<br><br>___________________</div>
     </div>
-    ${_buildOfficialPrintFooterHtml()}
+    $vatFooterHtml
   </div>
 </body>
 </html>''';
@@ -3731,12 +3741,10 @@ class _ErpRootGateState extends State<ErpRootGate> {
                         scrollDirection: Axis.horizontal,
                         child: DataTable(
                           headingRowHeight: 32,
-                          dataRowMinHeight: 28,
-                          dataRowMaxHeight: 34,
+                          dataRowHeight: 32,
                           columnSpacing: 14,
                           horizontalMargin: 10,
-                          headingRowColor: WidgetStateProperty.all(const Color(0xFF1E3A5F)),
-                          headingTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                          headingTextStyle: const TextStyle(color: Color(0xFF1E3A5F), fontWeight: FontWeight.bold, fontSize: 11),
                           dataTextStyle: const TextStyle(color: Color(0xFF0F172A), fontSize: 11),
                           columns: [
                             const DataColumn(label: Text('#')),
@@ -3755,7 +3763,6 @@ class _ErpRootGateState extends State<ErpRootGate> {
                             final t = filteredTx[idx];
                             final isDep = t.mode == TxMode.deposit;
                             return DataRow(
-                              color: WidgetStateProperty.all(idx.isEven ? Colors.white : const Color(0xFFF8FAFC)),
                               cells: [
                                 DataCell(Text('${idx + 1}')),
                                 DataCell(Text(_fmtDate(t.date))),
@@ -3930,11 +3937,9 @@ class _ErpRootGateState extends State<ErpRootGate> {
                       scrollDirection: Axis.horizontal,
                       child: DataTable(
                         headingRowHeight: 30,
-                        dataRowMinHeight: 28,
-                        dataRowMaxHeight: 34,
+                        dataRowHeight: 32,
                         columnSpacing: 14,
-                        headingRowColor: WidgetStateProperty.all(const Color(0xFF0F766E)),
-                        headingTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                        headingTextStyle: const TextStyle(color: Color(0xFF0F766E), fontWeight: FontWeight.bold, fontSize: 11),
                         dataTextStyle: const TextStyle(fontSize: 11, color: Color(0xFF0F172A)),
                         columns: [
                           DataColumn(label: Text(_t('تاریخ', 'Date', 'التاريخ'))),
@@ -5903,6 +5908,12 @@ class _ErpRootGateState extends State<ErpRootGate> {
       trList.add('<tr>${tds.join('')}</tr>');
     }
 
+    final repHeaderHtml = _buildOfficialPrintHeaderHtml(
+      repTitle,
+      '<b>${_t('تاریخ گزارش:', 'Report Date:', 'تاريخ التقرير:')}</b> ${_fmtDate(DateTime.now())}<br><b>${_t('واحد پول گزارش:', 'Currency:', 'العملة:')}</b> $_currUnit<br><b>${_t('کاربر صادرکننده:', 'Prepared By:', 'المستخدم:')}</b> ${_currentUser?.displayName ?? 'Admin'}',
+    );
+    final repFooterHtml = _buildOfficialPrintFooterHtml();
+
     final htmlDoc = '''<!DOCTYPE html>
 <html lang="${_lang.name}" dir="$dirStr">
 <head>
@@ -5924,10 +5935,7 @@ class _ErpRootGateState extends State<ErpRootGate> {
   <div class="no-print" style="margin-bottom:14px;">
     <button onclick="window.print()" style="padding:8px 16px; background:#0f766e; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🖨️ Print / Save PDF</button>
   </div>
-  ${_buildOfficialPrintHeaderHtml(
-    repTitle,
-    '<b>${_t('تاریخ گزارش:', 'Report Date:', 'تاريخ التقرير:')}</b> ${_fmtDate(DateTime.now())}<br><b>${_t('واحد پول گزارش:', 'Currency:', 'العملة:')}</b> $_currUnit<br><b>${_t('کاربر صادرکننده:', 'Prepared By:', 'المستخدم:')}</b> ${_currentUser?.displayName ?? 'Admin'}',
-  )}
+  $repHeaderHtml
   <table>
     <thead><tr>${thList.join('')}</tr></thead>
     <tbody>${trList.join('')}</tbody>
@@ -5941,7 +5949,7 @@ class _ErpRootGateState extends State<ErpRootGate> {
     <div>${_t('امضای ذی‌حساب و ممیز مالیاتی عمان', 'Financial Comptroller & Tax Auditor', 'توقيع المراقب المالي والضريبي')}<br><br>___________________</div>
     <div>${_t('امضای مدیریت ارشد / شرکا', 'Executive / Partners Approval', 'توقيع الإدارة العليا / الشركاء')}<br><br>___________________</div>
   </div>
-  ${_buildOfficialPrintFooterHtml()}
+  $repFooterHtml
 </body>
 </html>''';
 
@@ -6190,12 +6198,10 @@ class _ErpRootGateState extends State<ErpRootGate> {
                         scrollDirection: Axis.horizontal,
                         child: DataTable(
                           headingRowHeight: 32,
-                          dataRowMinHeight: 28,
-                          dataRowMaxHeight: 34,
+                          dataRowHeight: 32,
                           columnSpacing: 14,
                           horizontalMargin: 10,
-                          headingRowColor: WidgetStateProperty.all(const Color(0xFF1E3A5F)),
-                          headingTextStyle: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                          headingTextStyle: const TextStyle(color: Color(0xFF1E3A5F), fontWeight: FontWeight.bold, fontSize: 11),
                           dataTextStyle: const TextStyle(color: Color(0xFF0F172A), fontSize: 11),
                           columns: [
                             const DataColumn(label: Text('#')),
@@ -6213,7 +6219,6 @@ class _ErpRootGateState extends State<ErpRootGate> {
                           rows: List<DataRow>.generate(dynamicRows.take(100).length, (idx) {
                             final r = dynamicRows[idx];
                             return DataRow(
-                              color: WidgetStateProperty.all(idx.isEven ? Colors.white : const Color(0xFFF8FAFC)),
                               cells: [
                                 DataCell(Text('${idx + 1}')),
                                 if (_colDate) DataCell(Text(_fmtDate(r.date))),
