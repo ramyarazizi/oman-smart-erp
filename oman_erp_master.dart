@@ -3331,12 +3331,9 @@ class _ErpRootGateState extends State<ErpRootGate> {
       _showMsg(_t('✅ گزارش رسمی ذی‌حسابی و مالیات VAT عمان در فایل $fileName ذخیره و آماده چاپ شد.', '✅ Official Oman VAT report saved & opened.', '✅ تم حفظ تقرير ضريبة القيمة المضافة العمانية للطباعة.'));
     } catch (_) {
       Clipboard.setData(ClipboardData(
-        text: 'گزارش ذی‌حسابی و مالیات بر ارزش افزوده عمان — $kCompanyTitleFa (CR: $kCompanyCrNo)
-'
-            'مالیات فروش (Output VAT 5%): ${_fmtMoneyWithUnit(outputVatSales)}
-'
-            'مالیات خرید قابل استرداد (Claimable Input VAT 5%): ${_fmtMoneyWithUnit(claimableInputVat)}
-'
+        text: 'گزارش ذی‌حسابی و مالیات بر ارزش افزوده عمان — $kCompanyTitleFa (CR: $kCompanyCrNo)\n'
+            'مالیات فروش (Output VAT 5%): ${_fmtMoneyWithUnit(outputVatSales)}\n'
+            'مالیات خرید قابل استرداد (Claimable Input VAT 5%): ${_fmtMoneyWithUnit(claimableInputVat)}\n'
             'مانده خالص پرداختنی به سازمان مالیات عمان: ${_fmtMoneyWithUnit(netVatPayableToOta)}',
       ));
       _showMsg(_t('✅ خلاصه گزارش رسمی مالیات VAT در حافظه کپی شد.', '✅ VAT summary copied to clipboard.', '✅ تم نسخ ملخص الضريبة للحافظة.'));
@@ -4893,11 +4890,8 @@ class _ErpRootGateState extends State<ErpRootGate> {
                     ],
                   ),
                   subtitle: Text(
-                    '${_t('بهای واحد:', 'Avg Cost:', 'التكلفة:')} ${_fmtMoneyWithUnit(item.avgUnitCostOMR)}'
-                    '${whType == WarehouseType.finishedGood ? ' | ${_t('فروش:', 'Price:', 'البيع:')} ${_fmtMoneyWithUnit(item.defaultSalePriceOMR)}' : ''}
-'
-                    '🏷️ Batch: ${item.batchNumber} | 📅 Exp (FEFO): ${item.expiryDateStr}'
-                    '${item.reservedQty > 0 ? ' | ⏳ ${_t("رزرو حواله:", "Reserved:", "محجوز:")} ${_fmtQty(item.reservedQty)}' : ''}',
+                    '${_t("بهای واحد:", "Avg Cost:", "التكلفة:")} ${_fmtMoneyWithUnit(item.avgUnitCostOMR)}\n'
+                    '🏷️ Batch: ${item.batchNumber} | 📅 Exp (FEFO): ${item.expiryDateStr}',
                   ),
                   trailing: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -7185,62 +7179,46 @@ class _ErpRootGateState extends State<ErpRootGate> {
                 _buildHelpSectionTile(
                   _t('۱. راهنمای ورود اولیه، تنظیم آدرس دیتابیس سرور و پسورد مادر', '1. Initial Database Setup, User Login & Emergency Master Key', '١. الإعداد الأولي لقاعدة البيانات وتسجيل الدخول وكلمة المرور الأم'),
                   _t(
-                    '• در اولین اجرای برنامه روی هر سیستم، ابتدا آدرس سرور دیتابیس را وارد کنید یا گزینه «دیتابیس داخلی دستگاه» را بزنید.
-'
+                    '• در اولین اجرای برنامه روی هر سیستم، ابتدا آدرس سرور دیتابیس را وارد کنید یا گزینه «دیتابیس داخلی دستگاه» را بزنید.\n'
                     '• اگر رمز ادمین را فراموش کردید، در صفحه ورود روی دکمه «بازیابی با پسورد مادر» بزنید و شاه‌کلید اضطراری (OMAN-MASTER-2026) یا پسورد مادر اختصاصی خود را وارد نمایید.',
-                    '• On first run, configure the central database URL or initialize local storage.
-'
+                    '• On first run, configure the central database URL or initialize local storage.\n'
                     '• If the Admin password is forgotten, use the Emergency Master Key (OMAN-MASTER-2026) on the login screen.',
-                    '• عند التشغيل الأول، أدخل رابط قاعدة البيانات المركزية أو اختر التخزين المحلي.
-'
+                    '• عند التشغيل الأول، أدخل رابط قاعدة البيانات المركزية أو اختر التخزين المحلي.\n'
                     '• في حال نسيان كلمة مرور المدير، استخدم كلمة المرور الأم الطارئة (OMAN-MASTER-2026).',
                   ),
                 ),
                 _buildHelpSectionTile(
                   _t('۲. راهنمای ثبت هزینه‌ها، جدول فشرده (با فونت ریز) و ذی‌حسابی مالیات VAT عمان', '2. Petty Cash, Compact Expense Table & Oman 5% VAT Comptroller', '٢. تسجيل المصاريف، الجدول المدمج، والرقابة الضريبية العمانية (5% VAT)'),
                   _t(
-                    '• در منوی اول (تنخواه و هزینه)، سه زیربخش راست‌چین در اختیار شماست:
-'
-                    '  ۱- «ثبت سند هزینه / تنخواه»: فرم تمیز ثبت هزینه به همراه پنل ذی‌حسابی که به صورت هوشمند مشخص می‌کند آیا هزینه مشمول ۵٪ مالیات قابل استرداد عمان (Standard 5% Input VAT با فاکتور رسمی مالیاتی)، نرخ صفر (۰٪ مواد غذایی پایه) یا معاف است.
-'
-                    '  ۲- «جدول استاندارد و فشرده هزینه‌ها»: تمام هزینه‌های ثبت‌شده بدون شلوغ کردن فرم، در یک جدول مالی شیک با فونت ریز (11px) لیست می‌شوند.
-'
+                    '• در منوی اول (تنخواه و هزینه)، سه زیربخش راست‌چین در اختیار شماست:\n'
+                    '  ۱- «ثبت سند هزینه / تنخواه»: فرم تمیز ثبت هزینه به همراه پنل ذی‌حسابی که به صورت هوشمند مشخص می‌کند آیا هزینه مشمول ۵٪ مالیات قابل استرداد عمان (Standard 5% Input VAT با فاکتور رسمی مالیاتی)، نرخ صفر (۰٪ مواد غذایی پایه) یا معاف است.\n'
+                    '  ۲- «جدول استاندارد و فشرده هزینه‌ها»: تمام هزینه‌های ثبت‌شده بدون شلوغ کردن فرم، در یک جدول مالی شیک با فونت ریز (11px) لیست می‌شوند.\n'
                     '  ۳- «ذی‌حسابی و گزارش نهایی مالیات VAT عمان»: محاسبه خودکار مالیات فروش منهای مالیات خرید قابل استرداد و چاپ رسمی اظهارنامه با سربرگ CR: 1658937.',
-                    '• Tab 1 is organized into 3 clean sub-tabs:
-'
-                    '  1- Clean Expense Entry Form with automatic Oman 5% VAT Comptroller classification.
-'
-                    '  2- Compact Expense DataGrid with 11px font for maximum space efficiency.
-'
+                    '• Tab 1 is organized into 3 clean sub-tabs:\n'
+                    '  1- Clean Expense Entry Form with automatic Oman 5% VAT Comptroller classification.\n'
+                    '  2- Compact Expense DataGrid with 11px font for maximum space efficiency.\n'
                     '  3- Final Oman Tax Authority (OTA) VAT Return & Comptroller Audit Report.',
-                    '• ينقسم القسم الأول إلى ٣ تبويبات منظمة:
-'
-                    '  ١- نموذج تسجيل المصروفات مع التصنيف التلقائي لضريبة القيمة المضافة العمانية (5%).
-'
-                    '  ٢- جدول المصاريف المدمج بخط صغير وأنيق لتوفير المساحة.
-'
+                    '• ينقسم القسم الأول إلى ٣ تبويبات منظمة:\n'
+                    '  ١- نموذج تسجيل المصروفات مع التصنيف التلقائي لضريبة القيمة المضافة العمانية (5%).\n'
+                    '  ٢- جدول المصاريف المدمج بخط صغير وأنيق لتوفير المساحة.\n'
                     '  ٣- التقرير النهائي للمراقب المالي وإقرار ضريبة القيمة المضافة العمانية.',
                   ),
                 ),
                 _buildHelpSectionTile(
                   _t('۳. راهنمای ۳ انبار، هشدار انقضا (FEFO)، فرمول تولید (BOM) و حواله خروج دو مرحله‌ای', '3. Three Warehouses, FEFO Expiry Alerts, BOM Costing & Two-Step Exit Slips', '٣. المستودعات الثلاثة، تنبيهات الصلاحية، تكلفة التصنيع وسندات الإخراج'),
                   _t(
-                    '• انبار ۱ (مواد اولیه)، انبار ۲ (ملزومات بسته‌بندی) و انبار ۳ (محصول نهایی) دارای قفل موجودی منفی، رهگیری کد بچ و تاریخ انقضا (FEFO) هستند.
-'
+                    '• انبار ۱ (مواد اولیه)، انبار ۲ (ملزومات بسته‌بندی) و انبار ۳ (محصول نهایی) دارای قفل موجودی منفی، رهگیری کد بچ و تاریخ انقضا (FEFO) هستند.\n'
                     '• با ثبت هر سفارش فروش، «برگه خروج کالا از انبار» به صورت خودکار با سربرگ ۳ زبانه شرکت ارواد و شماره ثبت CR: 1658937 صادر و آماده چاپ می‌شود.',
-                    '• Warehouses 1, 2, and 3 enforce negative-stock locks and FEFO batch expiry tracking.
-'
+                    '• Warehouses 1, 2, and 3 enforce negative-stock locks and FEFO batch expiry tracking.\n'
                     '• Every sales order automatically issues an official printable Warehouse Exit Slip with Arwad CR: 1658937 header.',
-                    '• تدعم المستودعات الثلاثة قفل المخزون السالب وتتبع تواريخ الصلاحية.
-'
+                    '• تدعم المستودعات الثلاثة قفل المخزون السالب وتتبع تواريخ الصلاحية.\n'
                     '• يصدر النظام تلقائياً سند إخراج بضاعة رسمي بشعار شركة أرواد ورقم السجل التجاري 1658937.',
                   ),
                 ),
                 _buildHelpSectionTile(
                   _t('۴. راهنمای سبد سفارش چندقلمی، پیش‌فاکتور، سقف اعتبار نسیه و دریافت چک مدت‌دار (PDC)', '4. Multi-Item Sales Cart, Proforma Quotes, Credit Limit & PDC Cheques', '٤. سلة الطلبات المتعددة، الفاتورة المبدئية، حد الائتمان والشيكات الآجلة'),
                   _t(
-                    '• می‌توانید در یک فاکتور چندین قلم کالا اضافه کنید، تخفیف یا اشانتیون ثبت نمایید، یا پیش‌فاکتور رسمی صادر کنید.
-'
+                    '• می‌توانید در یک فاکتور چندین قلم کالا اضافه کنید، تخفیف یا اشانتیون ثبت نمایید، یا پیش‌فاکتور رسمی صادر کنید.\n'
                     '• تسویه حساب مشتریان هم به صورت نقدی، هم اقساطی (چندمرحله‌ای) و هم با چک مدت‌دار بانکی (PDC) قابل ثبت است.',
                     '• Create multi-line invoices, apply discounts/bonuses, issue proforma quotes, and record partial or PDC cheque payments.',
                     '• إمكانية إصدار فواتير متعددة الأصناف، وعروض أسعار، وتسجيل دفعات جزئية أو شيكات آجلة.',
@@ -7249,8 +7227,7 @@ class _ErpRootGateState extends State<ErpRootGate> {
                 _buildHelpSectionTile(
                   _t('۵. راهنمای تغییر زبان (FA / EN / AR)، انتخاب واحد پول (ریال / دلار) و بک‌آپ خودکار', '5. Tri-Lingual UI, Multi-Currency (OMR / USD) & Automated Backups', '٥. تغيير اللغة (فارسي / إنجليزي / عربي)، اختيار العملة والنسخ الاحتياطي'),
                   _t(
-                    '• از نوار بالای برنامه می‌توانید در هر لحظه زبان برنامه را بین فارسی، انگلیسی و عربی و واحد پول را بین ریال عمان (OMR) و دلار آمریکا (USD) تغییر دهید.
-'
+                    '• از نوار بالای برنامه می‌توانید در هر لحظه زبان برنامه را بین فارسی، انگلیسی و عربی و واحد پول را بین ریال عمان (OMR) و دلار آمریکا (USD) تغییر دهید.\n'
                     '• در تب تنظیمات، سیستم بک‌آپ‌گیری زمان‌بندی‌شده خودکار و بازیابی یک‌کلیکی (Restore) حافظ اطلاعات شماست.',
                     '• Switch live between Persian, English, and Arabic, and between OMR and USD with historical rate locking and automated backups.',
                     '• يمكنك التبديل الفوري بين اللغات الثلاث والعملات (ريال عماني / دولار) مع النسخ الاحتياطي التلقائي.',
